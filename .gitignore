@@ -37,3 +37,6 @@ build/
 
 ### Mac OS ###
 .DS_Store
+Lang_Ukrainian-with-code.xml
+Lang_Ukrainian.xml
+config.properties

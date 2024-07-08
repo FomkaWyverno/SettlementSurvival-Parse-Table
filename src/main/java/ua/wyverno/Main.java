@@ -1,19 +1,17 @@
 package ua.wyverno;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
-import ua.wyverno.jackson.deserializer.JsonArrayOfLangConfigDeserializer;
-import ua.wyverno.jackson.deserializer.XmlArrayOfLangConfigDeserializer;
 import ua.wyverno.localization.ArrayOfLangConfig;
 import ua.wyverno.localization.Lang;
 import ua.wyverno.localization.LangConfig;
 import ua.wyverno.localization.LangList;
+import ua.wyverno.table.TableSettlement;
+
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Hello world!
@@ -21,27 +19,47 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class Main {
 
-    public static void main( String[] args ) throws IOException {
-        Path jsonPath = Paths.get("settlement-survival-ua.json");
-        Path xmlOriginal = Paths.get("settlement-survival-ua-original.json");
-        Path xmlDebug = Paths.get("settlement-survival-debug.json");
-        Path xmlPath = Paths.get("Lang_Ukrainian-with-code.xml");
+    private static final Path xmlPathUkr = Paths.get("Lang_Ukrainian.xml");
+    private static final Path jsonOriginalPath = Paths.get("Lang_English-original.json");
+    private static final Path jsonOriginalWithCode = Paths.get("Lang_English-with-code.json");
 
-        ObjectMapper mapper = new ObjectMapper();
+    public static void main(String[] args ) throws IOException {
+        TableSettlement tableSettlement = new TableSettlement(Config.getInstance().getTableUrl());
+
         XmlMapper xmlMapper = new XmlMapper();
-        ArrayOfLangConfig uaConfig = mapper.readValue(xmlOriginal.toFile(),
-                ArrayOfLangConfig.class);
+        ObjectMapper jsonMapper = new ObjectMapper();
 
-        ArrayOfLangConfig debugLangConfig = new ArrayOfLangConfig();
-        AtomicInteger counter = new AtomicInteger(0);
-        uaConfig.getConfigs().forEach(lConfig -> {
+        Path originalJson = Config.getInstance().isWithCode() ? jsonOriginalWithCode : jsonOriginalPath;
+        ArrayOfLangConfig originalLangConfig = jsonMapper.readValue(originalJson.toFile(), ArrayOfLangConfig.class);
+        ArrayOfLangConfig tableLangConfig = tableSettlement.getLangConfig();
+        ArrayOfLangConfig mergingLangConfig = mergingLangConfig(originalLangConfig, tableLangConfig);
+        xmlMapper.writerWithDefaultPrettyPrinter().writeValue(xmlPathUkr.toFile(), mergingLangConfig);
+
+//        XmlMapper xmlMapper = new XmlMapper();
+//        ArrayOfLangConfig arrayOfLangConfig = xmlMapper.readValue(new File("Lang_Ukrainian-with-code.xml"), ArrayOfLangConfig.class);
+//        ObjectMapper mapper = new ObjectMapper();
+//        mapper.writerWithDefaultPrettyPrinter().writeValue(new File("Lang_English-with-code.json"), arrayOfLangConfig);
+    }
+
+    public static ArrayOfLangConfig mergingLangConfig(ArrayOfLangConfig original, ArrayOfLangConfig secondArray) {
+        ArrayOfLangConfig merging = new ArrayOfLangConfig();
+        original.getConfigs().forEach(lConfig -> {
             String id = lConfig.id();
-            String langType = "Ukrainian";
-            String value = "!" + Integer.toString( counter.getAndIncrement(), 36) + "! " + lConfig.langList().lang().langValue();
-            debugLangConfig.getConfigs().add(new LangConfig(id, new LangList(new Lang(langType, value))));
+            boolean hasKey = false;
+            for (LangConfig secondLConfig : secondArray.getConfigs()) {
+                if (id.equals(secondLConfig.id())) {
+                    hasKey = true;
+                    merging.getConfigs().add(new LangConfig(id,
+                            new LangList(new Lang("Ukrainian", secondLConfig.langList().lang().langValue()))));
+                    break;
+                }
+            }
+
+            if (!hasKey) {
+                merging.getConfigs().add(lConfig);
+            }
         });
 
-        xmlMapper.writerWithDefaultPrettyPrinter().writeValue(xmlPath.toFile(), debugLangConfig);
-        mapper.writerWithDefaultPrettyPrinter().writeValue(xmlDebug.toFile(), debugLangConfig);
+        return merging;
     }
 }
